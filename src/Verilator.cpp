@@ -42,6 +42,7 @@
 #include "V3Coverage.h"
 #include "V3CoverageJoin.h"
 #include "V3Covergroup.h"
+#include "V3CudaBatch.h"
 #include "V3Dead.h"
 #include "V3Decompose.h"
 #include "V3Delayed.h"
@@ -638,6 +639,8 @@ static void process() {
             // Create AstCUse to determine what class forward declarations/#includes needed in C
             V3CUse::cUseAll();
 
+            if (v3Global.opt.cudaBatch()) V3CudaBatch::apply(v3Global.rootp());
+
             // Evaluate cost of a current hierarchical block
             if (!v3Global.opt.libCreate().empty()) {
                 v3Global.currentHierBlockCost(V3Control::getCurrentHierBlockCost());
@@ -670,6 +673,7 @@ static void process() {
     if (!v3Global.opt.serializeOnly()
         && !v3Global.opt.dpiHdrOnly()) {  // Unfortunately we have some lint checks in emitcImp.
         V3EmitC::emitcImp();
+        V3EmitC::emitcCudaBatch();
     }
     if (v3Global.opt.serializeOnly()) {
         emitSerialized();

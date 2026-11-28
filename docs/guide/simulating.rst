@@ -753,3 +753,195 @@ using `-CFLAGS -D_GLIBCXX_DEBUG` will not hide any bug, so may be used.
 Using :vlopt:`--runtime-debug` or `-CFLAGS -DVL_DEBUG=1` will only print a
 message if something goes wrong. To enable debug print messages at runtime,
 additionally use the :vlopt:`+verilator+debug` runtime option.
+
+
+.. _cuda batch simulation:
+
+CUDA Batch Simulation
+=====================
+
+With :vlopt:`--cuda-batch`, the generated executable can run many copies of
+the design at once on an NVIDIA GPU, one copy per test. All copies share
+one compiled model, and each copy has its own state, time and plusargs.
+Results are cycle-exact with the CPU model.
+
+The GPU pays off when there are many tests to run: one copy on the GPU is
+slower than one CPU thread, but hundreds or thousands of copies run in
+parallel.
+
+Building
+--------
+
+Add :vlopt:`--cuda-batch` to the usual command, for example:
+
+.. code-block:: bash
+
+   verilator --binary --timing --threads 64 --cuda-batch top.sv
+
+The generated makefile compiles the GPU part with :command:`nvcc` and the
+rest with ``CXX``, which must find the CUDA headers
+(:file:`cuda_runtime_api.h`). The makefile checks this and stops with a
+message otherwise; set ``CXX`` and ``LINK``, or ``CUDA_HOME`` for a CUDA
+installation outside the default include path. The make variables
+``CUDA_HOME``, ``NVCC``, ``NVCC_ARCH`` (default ``-arch=native``),
+``NVCC_HOST`` and ``OPT_CUDA_BATCH`` (default ``-O3 -maxrregcount=64
+-Xptxas --disable-optimizer-constants``) can be overridden.
+:vlopt:`--threads` is not required, but with it the GPU runs the task graph
+of each copy in parallel.
+
+By default the model runs in resident mode: the whole scheduler, including
+delays and the time wheel, runs on the GPU, and the host only starts the
+kernel and collects results. Resident mode needs :vlopt:`--timing` and a
+testbench that makes its own clocks with delays, because no C++ code drives
+the model while it runs. Delays and ``assign #d`` continuous delays are
+supported; event controls inside procedural code, fork/join and process
+control are reported at Verilation time with their location.
+:vlopt:`--cuda-batch-hybrid` selects the older hybrid mode, in which the
+host runs the scheduler and C++ may drive the model.
+
+Running
+-------
+
+Without any of the variables below, the executable runs one copy on the
+GPU, exactly as the CPU model would run.
+
+``VERILATOR_CUDA_BATCH_COPIES=<n>`` runs ``n`` identical copies.
+
+To run a batch of different tests, list them in a job file and set
+``VERILATOR_CUDA_BATCH_JOBS`` to its path. Each line holds a job name
+followed by the arguments of that copy, which are used instead of the
+command-line arguments (plusargs and positional arguments):
+
+.. code-block:: none
+
+   add   +loadmem=tests/add.elf  tests/add.elf
+   mul   +loadmem=tests/mul.elf  tests/mul.elf
+
+Each job writes its output to :file:`<name>.log` in the directory given by
+``VERILATOR_CUDA_BATCH_LOGDIR`` (default the current directory). When all
+jobs are done, :file:`cuda_batch_summary.txt` in the same directory lists
+each job with ``PASS`` or ``FAIL`` and its finish time.
+
+The number of copies on the GPU at once (slots) follows from the free GPU
+memory and can be capped with ``VERILATOR_CUDA_BATCH_SLOTS``. When a copy
+finishes, its slot is refilled with the next job. A job fails on its own,
+without stopping the others, when it calls ``$stop`` or ``$error``, ends
+without ``$finish``, does not converge, runs out of fork slots
+(:vlopt:`--cuda-batch-fork-slots`), hits an internal fatal error such as a
+zero delay with ``--no-sched-zero-delay``, or cannot be loaded by the GPU
+DPI code.
+
+Verilog code that reads plusargs (``$value$plusargs``, ``$test$plusargs``)
+runs when the host initializes the model, once for all copies, so it sees
+the command-line plusargs. A job whose own arguments give a different value
+for one of those plusargs fails with a message saying so; per-job values
+must reach the design through GPU DPI code, which can read them with
+``VerilatedCudaBatch::jobPlusArg``.
+
+Output from ``$display`` and similar tasks is kept in a per-copy GPU buffer
+(:vlopt:`--cuda-batch-output-bytes`) and printed by the host at the end of
+each time slice. The time printed is the time of the copy.
+
+Checkpoints
+-----------
+
+A long batch can save checkpoints so that it survives an interruption. With
+``VERILATOR_CUDA_BATCH_CHECKPOINT_SEC=<seconds>``, the executable writes
+:file:`cuda_batch_checkpoint.bin` in the log directory at that interval (to
+a temporary file first, then renamed). Running the same command again with
+``VERILATOR_CUDA_BATCH_RESUME=1`` continues from the checkpoint; finished
+jobs keep their logs and results. The checkpoint must come from the same
+model, job file and GPU layout, and is removed when the batch completes.
+
+Environment Variables
+---------------------
+
+.. list-table::
+   :header-rows: 1
+
+   - - Variable
+     - Meaning
+   - - VERILATOR_CUDA_BATCH_COPIES
+     - Number of identical copies to run.
+   - - VERILATOR_CUDA_BATCH_JOBS
+     - Job file for a batch of different tests.
+   - - VERILATOR_CUDA_BATCH_LOGDIR
+     - Directory for job logs, the summary and the checkpoint.
+   - - VERILATOR_CUDA_BATCH_SLOTS
+     - Maximum number of copies on the GPU at once.
+   - - VERILATOR_CUDA_BATCH_CHECKPOINT_SEC
+     - Seconds between checkpoints; 0 or unset disables them.
+   - - VERILATOR_CUDA_BATCH_RESUME
+     - Resume from the checkpoint in the log directory.
+   - - VERILATOR_CUDA_BATCH_SLICE_MS
+     - Length of one kernel time slice in milliseconds (default 300 when
+       batching or when the GPU drives a display, else unlimited).
+   - - VERILATOR_CUDA_BATCH_RESIDENT_STATS
+     - Print slot sizing, progress every 30 seconds and timing statistics.
+   - - VERILATOR_CUDA_BATCH_STACK
+     - GPU stack bytes per thread (default: what the kernel needs plus 1
+       KB).
+   - - VERILATOR_CUDA_BATCH_RESIDENT
+     - Set to 0 to run the model on the CPU instead, on one thread.
+   - - VERILATOR_CUDA_BATCH_LEVELS, VERILATOR_CUDA_BATCH_FLOW_MAX
+     - Task graph execution: levels with a barrier per level, or in
+       dependency order below ``FLOW_MAX`` (default 2048) waiting copies.
+   - - VERILATOR_CUDA_BATCH_NOSEQ, VERILATOR_CUDA_BATCH_NOSPLIT
+     - Disable the sequential graph path for copies with few active tasks,
+       or the split of control blocks from graph workers (for comparison).
+   - - VERILATOR_CUDA_BATCH_DUMP_TIME, VERILATOR_CUDA_BATCH_DUMP_FILE
+     - Stop at the given time and dump the state of copy 0, for comparing
+       the GPU and CPU models.
+
+.. _cuda batch dpi:
+
+CUDA Batch DPI Functions
+------------------------
+
+A DPI import that is called every cycle, such as a memory or serial model,
+must run on the GPU too. List it with :vlopt:`--cuda-batch-dpi`, and
+provide a CUDA implementation with the same name in a :file:`.cu` file
+given on the Verilator command line:
+
+.. code-block:: c++
+
+   #include "verilated_cuda_batch_device.h"
+
+   // import "DPI-C" function int job_seed();
+   __device__ void job_seed(VlCudaBatchDpiCtx ctx, IData& result) {
+       result = g_seeds[ctx.m_copy];
+   }
+
+The arguments use Verilator's types (``CData``, ``IData``, ``QData``, ...),
+and a function's return value is passed as a final reference argument, as
+in Verilator's DPI import wrappers. ``ctx.m_copy`` is the index of the copy
+and ``ctx.m_n`` the number of copies. The function is used only in code
+that runs on the GPU; calls made while the host initializes the model still
+use the normal C implementation, which must also exist.
+
+``vlCudaBatchDpiWrite(ctx, data, len)`` prints text into the output of the
+copy. Per-copy state for these functions is allocated and initialized on
+the host through optional C hooks, which the runtime calls if they are
+defined:
+
+- ``size_t vlCudaBatchDpiCopyBytes()`` returns the GPU memory one copy
+  needs, so that slot sizing accounts for it.
+- ``void vlCudaBatchDpiCopyInit(int copy, int n)`` initializes one copy,
+  for example by loading its program; it is called again for each refill.
+  ``VerilatedCudaBatch::jobArg``, ``jobArgCount`` and ``jobPlusArg`` give
+  the arguments of the job in that slot, and
+  ``VerilatedCudaBatch::failCopy`` fails it with a message.
+- ``void vlCudaBatchDpiCheckpointSave(FILE*, int n)`` and ``void
+  vlCudaBatchDpiCheckpointLoad(FILE*, int n)`` save and restore that state;
+  ``VerilatedCudaBatch::checkpointWriteDevice`` and
+  ``checkpointReadDevice`` copy device memory to and from the file.
+
+Limitations
+-----------
+
+- Linux and NVIDIA GPUs only, one GPU per process.
+- No waveform tracing or coverage collection on the GPU.
+- In resident mode, host DPI calls, VPI callbacks and timing constructs
+  other than delays and ``assign #d`` are not supported in the code that
+  runs every cycle, and the testbench must make its own clocks.
+- :vlopt:`--cuda-batch-layout` ``aos`` and ``aosoa`` need resident mode.

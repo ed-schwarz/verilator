@@ -76,6 +76,7 @@ set(HEADERS
     V3Coverage.h
     V3CoverageJoin.h
     V3Covergroup.h
+    V3CudaBatch.h
     V3Dead.h
     V3DebugBisect.h
     V3Decompose.h
@@ -253,6 +254,8 @@ set(COMMON_SOURCES
     V3Coverage.cpp
     V3CoverageJoin.cpp
     V3Covergroup.cpp
+    V3CudaBatch.cpp
+    V3CudaBatchTiming.cpp
     V3Dead.cpp
     V3Decompose.cpp
     V3Delayed.cpp
@@ -277,6 +280,7 @@ set(COMMON_SOURCES
     V3DupFinder.cpp
     V3EmitCBase.cpp
     V3EmitCConstPool.cpp
+    V3EmitCCudaBatch.cpp
     V3EmitCExecGraph.cpp
     V3EmitCFunc.cpp
     V3EmitCHeaders.cpp

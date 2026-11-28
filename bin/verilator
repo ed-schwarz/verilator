@@ -435,6 +435,13 @@ detailed descriptions of these arguments.
     --coverage-toggle           Enable toggle coverage
     --coverage-underscore       Enable coverage of _signals
     --coverage-user             Enable SVL user coverage
+    --cuda-batch                       Also build a GPU model for batches of copies
+    --cuda-batch-dpi <names>           DPI imports with a GPU implementation
+    --cuda-batch-fork-slots <n>        Concurrent forks per process on the GPU
+    --cuda-batch-hybrid                Run the GPU scheduler from the host
+    --cuda-batch-layout <layout>       GPU state layout: soa, aos or aosoa
+    --cuda-batch-layout-group <n>      Copies per group with aosoa layout
+    --cuda-batch-output-bytes <n>      Per-copy GPU output buffer size
     --cxx-modules               Build C++ module interface units
      -D<var>[=<value>]          Set preprocessor define
     --debug                     Enable debugging

@@ -16,6 +16,7 @@
 
 #include "V3PchAstNoMT.h"  // VL_MT_DISABLED_CODE_UNIT
 
+#include "V3CudaBatch.h"
 #include "V3EmitC.h"
 #include "V3EmitCFunc.h"
 #include "V3UniqueNames.h"
@@ -406,6 +407,7 @@ class EmitCModel final : public EmitCFunc {
 
         puts("// Register model with the context\n");
         puts("contextp()->addModel(this);\n");
+        if (v3Global.opt.cudaBatch()) puts("VerilatedCudaBatch::init(contextp());\n");
         if (v3Global.opt.profExec()) {
             putsDecoration(nullptr, "// Profile the evaluation loop's region loops\n");
             const bool topLevel = !v3Global.opt.hierChild() && v3Global.opt.libCreate().empty();
@@ -508,6 +510,22 @@ class EmitCModel final : public EmitCFunc {
         puts("\nvoid " + EmitCUtil::topClassName() + "::eval_step() {\n");
         puts("VL_DEBUG_IF(VL_DBG_MSGF(\"+++++TOP Evaluate " + EmitCUtil::topClassName()
              + "::eval_step\\n\"); );\n");
+        if (V3CudaBatch::residentMode()) {
+            puts("VerilatedCudaBatch::hostStep(contextp()->time());\n");
+            puts("if (VL_UNLIKELY(VerilatedCudaBatch::hostDumpDue(contextp()->time()))) {\n");
+            puts("extern void " + v3Global.opt.prefix()
+                 + "__gpuDumpHost(void* selfp, const char* pathp);\n");
+            puts(v3Global.opt.prefix()
+                 + "__gpuDumpHost(&(vlSymsp->vlInst.TOP), VerilatedCudaBatch::dumpPath());\n");
+            puts("std::exit(0);\n");
+            puts("}\n");
+            puts("if (vlSymsp->__Vm_didInit && !contextp()->gotFinish() "
+                 "&& VerilatedCudaBatch::residentEnabled()) {\n");
+            puts("extern void " + v3Global.opt.prefix() + "__gpuResidentRun(void* selfp);\n");
+            puts(v3Global.opt.prefix() + "__gpuResidentRun(&(vlSymsp->vlInst.TOP));\n");
+            puts("return;\n");
+            puts("}\n");
+        }
         puts("m_evalLoop.eval();\n");
         puts("}\n");
 
@@ -590,7 +608,17 @@ class EmitCModel final : public EmitCFunc {
         }
 
         putSectionDelimiter("Events and timing");
-        if (auto* const delaySchedp = v3Global.rootp()->delaySchedulerp()) {
+        if (V3CudaBatch::timingLowered()) {
+            const std::string rootName = EmitCUtil::prefixNameProtect(modp);
+            const std::string pendingName = funcNameProtect(V3CudaBatch::eventsPendingFuncp());
+            const std::string nextName = funcNameProtect(V3CudaBatch::nextTimeSlotFuncp());
+            puts("bool " + pendingName + "(" + rootName + "* vlSelf);\n");
+            puts("uint64_t " + nextName + "(" + rootName + "* vlSelf);\n\n");
+            putns(modp, "bool " + EmitCUtil::topClassName() + "::eventsPending() { return "
+                            + pendingName + "(&(vlSymsp->vlInst.TOP)); }\n\n");
+            putns(modp, "uint64_t " + EmitCUtil::topClassName() + "::nextTimeSlot() { return "
+                            + nextName + "(&(vlSymsp->vlInst.TOP)); }\n");
+        } else if (auto* const delaySchedp = v3Global.rootp()->delaySchedulerp()) {
             putns(modp, "bool " + EmitCUtil::topClassName()
                             + "::eventsPending() { return !vlSymsp->vlInst.TOP.");
             puts(varName(delaySchedp));
@@ -671,6 +699,7 @@ class EmitCModel final : public EmitCFunc {
         puts("\n");
         puts("#include \"" + EmitCUtil::pchClassName() + ".h\"\n");
         if (v3Global.opt.rtmd()) puts("#include \"verilated_rtmd.h\"\n");
+        if (v3Global.opt.cudaBatch()) puts("#include \"verilated_cuda_batch.h\"\n");
 
         emitConstructorImplementation(modp);
         emitDestructorImplementation();

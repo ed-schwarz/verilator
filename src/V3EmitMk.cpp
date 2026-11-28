@@ -524,6 +524,10 @@ public:
         return static_cast<uint64_t>(ifs.tellg());
     }
 
+    static bool isGpuSource(const string& name) {
+        return name.size() > 3 && name.compare(name.size() - 3, 3, ".cu") == 0;
+    }
+
     void putMakeClassEntry(V3OutMkFile& of, const string& name) {
         of.puts("  " + V3Os::filenameNonDirExt(name) + " \\\n");
         ++m_putClassCount;
@@ -545,7 +549,8 @@ public:
                 if (cfilep && VString::endsWith(cfilep->name(), ".h")) {
                     headerBytes += fileSize(cfilep);
                 }
-                if (cfilep && cfilep->source() && cfilep->support() == false) {
+                if (cfilep && cfilep->source() && cfilep->support() == false
+                    && !isGpuSource(cfilep->name())) {
                     std::vector<FilenameWithScore>& files = cfilep->slow() ? slowFiles : fastFiles;
                     uint64_t& totalScore = cfilep->slow() ? slowTotalScore : fastTotalScore;
 
@@ -600,6 +605,20 @@ public:
         of.putSet("VM_VPI", v3Global.opt.vpi() ? "1" : "0");
         of.puts("# CUDA sources?  0/1 (from .cu files)\n");
         of.putSet("VM_CUDA", v3Global.opt.usesCuda() ? "1" : "0");
+        of.puts("# CUDA batch mode?  0/1 (from --cuda-batch)\n");
+        of.putSet("VM_CUDA_BATCH", v3Global.opt.cudaBatch() ? "1" : "0");
+        if (v3Global.opt.cudaBatch()) {
+            of.puts("# Deferred output bytes per copy (from --cuda-batch-output-bytes)\n");
+            of.putSet("VM_CUDA_BATCH_DEFER_BYTES",
+                      std::to_string(v3Global.opt.cudaBatchOutputBytes()));
+            std::string layout = v3Global.opt.cudaBatchLayout();
+            if (layout.empty()) layout = v3Global.opt.cudaBatchHybrid() ? "soa" : "aosoa";
+            of.puts("# CUDA batch state layout (from --cuda-batch-layout, "
+                    "--cuda-batch-layout-group)\n");
+            of.putSet("VM_CUDA_BATCH_LAYOUT", layout);
+            of.putSet("VM_CUDA_BATCH_LAYOUT_GROUP",
+                      std::to_string(v3Global.opt.cudaBatchLayoutGroup()));
+        }
         // Link flags for runtime VPI library loading are emitted by emitOverallMake() after
         // verilated.mk is included (so $(CFG_LDFLAGS_DYNAMIC)/$(CFG_LDLIBS_DYNAMIC) are defined).
 
@@ -642,7 +661,8 @@ public:
                     for (AstNodeFile* const nodep : v3Global.rootp()->filespList()) {
                         const AstCFile* const cfilep = VN_CAST(nodep, CFile);
                         if (cfilep && cfilep->source() && cfilep->slow() == (slow != 0)
-                            && cfilep->support() == (support != 0)) {
+                            && cfilep->support() == (support != 0)
+                            && !isGpuSource(cfilep->name())) {
                             putMakeClassEntry(of, cfilep->name());
                         }
                     }
@@ -650,6 +670,24 @@ public:
                 of.puts("\n");
                 V3Stats::addStat("Makefile targets, " + targetVar, m_putClassCount);
             }
+        }
+
+        if (v3Global.opt.cudaBatch()) {
+            of.puts("# GPU run-time classes, compile with nvcc\n");
+            m_putClassCount = 0;
+            of.puts("VM_CUDA_BATCH_GLOBAL += \\\n");
+            for (const string& cu : v3Global.verilatedCudaBatchFiles()) putMakeClassEntry(of, cu);
+            of.puts("\n");
+            of.puts("# Generated GPU classes, compile with nvcc\n");
+            of.puts("VM_CUDA_BATCH_CLASSES += \\\n");
+            for (AstNodeFile* const nodep : v3Global.rootp()->filespList()) {
+                const AstCFile* const cfilep = VN_CAST(nodep, CFile);
+                if (cfilep && cfilep->source() && isGpuSource(cfilep->name())) {
+                    putMakeClassEntry(of, cfilep->name());
+                }
+            }
+            of.puts("\n");
+            V3Stats::addStat("Makefile targets, VM_CUDA_BATCH", m_putClassCount);
         }
 
         of.putsHeader();
@@ -858,16 +896,18 @@ public:
             of.puts("\n### Link rules... (from --exe)\n");
             // '{prefix}__ALL.a', contains all hierarchical libraries
             of.puts(v3Global.opt.exeName()
-                    + ": $(VK_USER_OBJS) $(VK_GLOBAL_OBJS) $(VK_CUDA_DLINK) $(VM_PREFIX)__ALL.a"
+                    + ": $(VK_USER_OBJS) $(VK_GLOBAL_OBJS) $(VK_CUDA_BATCH_OBJS) $(VK_CUDA_DLINK) "
+                      "$(VM_PREFIX)__ALL.a"
                       " $(VM_USER_LDLIBS_FILES)\n");
             // User library files are in LDLIBS, so do not also link them from $^
             of.puts("\t$(LINK) $(LDFLAGS) $(filter-out $(VM_USER_LDLIBS_FILES),$^) $(LOADLIBES) "
                     "$(LDLIBS) $(LIBS) $(SC_LIBS) -o $@\n");
             of.puts("\n");
         } else if (!v3Global.opt.libCreate().empty()) {
-            const string libCreateDeps
-                = "$(VK_OBJS) $(VK_USER_OBJS) $(VK_GLOBAL_OBJS) $(VK_CUDA_DLINK) "
-                  + v3Global.opt.libCreate() + ".o $(VM_HIER_LIBS)" + archiveDep;
+            const string libCreateDeps = "$(VK_OBJS) $(VK_USER_OBJS) $(VK_GLOBAL_OBJS) "
+                                         "$(VK_CUDA_BATCH_OBJS) $(VK_CUDA_DLINK) "
+                                         + v3Global.opt.libCreate() + ".o $(VM_HIER_LIBS)"
+                                         + archiveDep;
             of.puts("\n### Library rules from --lib-create\n");
             // The rule to create .a is defined in verilated.mk, so just define dependency here.
             of.puts(v3Global.opt.libCreateName(false) + ": " + libCreateDeps + "\n");
@@ -899,7 +939,7 @@ public:
             // The rule to create .a is defined in verilated.mk, so just define dependency here.
             of.puts(libname + ": $(VK_OBJS) $(VK_USER_OBJS) $(VK_CUDA_DLINK) $(VM_HIER_LIBS)"
                     + archiveDep + "\n");
-            of.puts("libverilated.a: $(VK_GLOBAL_OBJS)\n");
+            of.puts("libverilated.a: $(VK_GLOBAL_OBJS) $(VK_CUDA_BATCH_OBJS)\n");
             // let default rule depend on '{prefix}__ALL.a', for compatibility
             of.puts("lib" + v3Global.opt.prefix() + ": " + libname
                     + " libverilated.a $(VM_PREFIX)__ALL.a\n");

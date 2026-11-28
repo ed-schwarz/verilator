@@ -466,7 +466,7 @@ extern void _vl_debug_print_w(int lbits, WDataInP const iwp) VL_MT_SAFE;
 #ifdef SYSTEMC_VERSION
 /// Return current simulation time
 // Already defined: extern sc_time sc_time_stamp();
-inline uint64_t vl_time_stamp64() VL_MT_SAFE { return sc_core::sc_time_stamp().value(); }
+inline VL_HD uint64_t vl_time_stamp64() VL_MT_SAFE { return sc_core::sc_time_stamp().value(); }
 #else  // Non-SystemC
 # if !defined(VL_TIME_CONTEXT) && !defined(VL_NO_LEGACY)
 #  ifdef VL_TIME_STAMP64
@@ -479,7 +479,7 @@ extern uint64_t vl_time_stamp64() VL_ATTR_WEAK VL_MT_SAFE;
 // On MSVC++ weak symbols are not supported so must be declared, or define
 // VL_TIME_CONTEXT.
 extern double sc_time_stamp() VL_ATTR_WEAK VL_MT_SAFE;  // Verilator 4.032 and newer
-inline uint64_t vl_time_stamp64() VL_MT_SAFE {
+inline VL_HD uint64_t vl_time_stamp64() VL_MT_SAFE {
     // clang9.0.1 requires & although we really do want the weak symbol value
     // cppcheck-suppress duplicateValueTernary
     return VL_LIKELY(&sc_time_stamp) ? static_cast<uint64_t>(sc_time_stamp()) : 0;

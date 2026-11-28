@@ -1,0 +1,4 @@
+%Error: --cuda-batch-layout 'aosoa' needs resident mode, not --cuda-batch-hybrid.
+        ... See the manual at https://verilator.org/verilator_doc.html?v=latest for more assistance.
+%Error: --cuda-batch-layout-group must be a power of two of at least 32.
+%Error: Exiting due to

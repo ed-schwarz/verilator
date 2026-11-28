@@ -87,6 +87,12 @@ associated programs.
    binary. May be used for debugging and selecting between multiple
    operating system builds.
 
+.. option:: VERILATOR_CUDA_BATCH_JOBS
+
+   Read by executables built with :vlopt:`--cuda-batch`: a job file of tests to
+   run as copies on the GPU. This and the other :code:`VERILATOR_CUDA_BATCH_*`
+   runtime variables are described in :ref:`cuda batch simulation`.
+
 .. option:: VERILATOR_GDB
 
    If set, the command to run when using the :vlopt:`--gdb` option, such as

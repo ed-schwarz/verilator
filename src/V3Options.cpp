@@ -950,6 +950,19 @@ void V3Options::notify() VL_MT_DISABLED {
         cmdfl->v3error("--make cannot be used together with --build. Suggest see manual");
     }
 
+    if (!m_cudaBatchLayout.empty() && m_cudaBatchLayout != "soa" && m_cudaBatchLayout != "aos"
+        && m_cudaBatchLayout != "aosoa") {
+        cmdfl->v3error("--cuda-batch-layout must be 'soa', 'aos' or 'aosoa', but got '"
+                       << m_cudaBatchLayout << "'.");
+    }
+    if (m_cudaBatchHybrid && (m_cudaBatchLayout == "aos" || m_cudaBatchLayout == "aosoa")) {
+        cmdfl->v3error("--cuda-batch-layout '"
+                       << m_cudaBatchLayout << "' needs resident mode, not --cuda-batch-hybrid.");
+    }
+    if (m_cudaBatchLayoutGroup < 32 || (m_cudaBatchLayoutGroup & (m_cudaBatchLayoutGroup - 1))) {
+        cmdfl->v3error("--cuda-batch-layout-group must be a power of two of at least 32.");
+    }
+
     // m_build, m_preprocOnly, m_dpiHdrOnly, m_lintOnly, and m_jsonOnly are mutually
     // exclusive
     std::vector<std::string> backendFlags;
@@ -1421,6 +1434,17 @@ void V3Options::parseOptsList(FileLine* fl, const string& optdir, int argc,
     DECL_OPTION("-coverage-underscore", OnOff, &m_coverageUnderscore);
     DECL_OPTION("-coverage-user", OnOff, &m_coverageUser);
 
+    DECL_OPTION("-cuda-batch", OnOff, &m_cudaBatch);
+    DECL_OPTION("-cuda-batch-dpi", CbVal, [this](const char* valp) {
+        for (const string& name : VString::split(valp)) {
+            if (!name.empty()) m_cudaBatchDpis.insert(name);
+        }
+    });
+    DECL_OPTION("-cuda-batch-fork-slots", Set, &m_cudaBatchForkSlots);
+    DECL_OPTION("-cuda-batch-hybrid", OnOff, &m_cudaBatchHybrid);
+    DECL_OPTION("-cuda-batch-layout", Set, &m_cudaBatchLayout);
+    DECL_OPTION("-cuda-batch-layout-group", Set, &m_cudaBatchLayoutGroup);
+    DECL_OPTION("-cuda-batch-output-bytes", Set, &m_cudaBatchOutputBytes);
     DECL_OPTION("-cxx-modules", OnOff, &m_cxxModules);
 
     DECL_OPTION("-D", CbPartialMatch, [this](const char* valp) VL_MT_DISABLED {

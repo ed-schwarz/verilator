@@ -47,6 +47,7 @@ class EmitCPch final : public EmitCBaseVisitorConst {
         puts("\n");
         puts("\n#include \"verilated.h\"\n");
         if (v3Global.dpi()) puts("#include \"verilated_dpi.h\"\n");
+        if (v3Global.opt.cudaBatch()) puts("#include \"verilated_cuda_batch.h\"\n");
 
         puts("\n");
         puts("#include \"" + EmitCUtil::symClassName() + ".h\"\n");

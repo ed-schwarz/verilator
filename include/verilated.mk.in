@@ -239,6 +239,28 @@ ifeq ($(VM_CUDA),1)
 endif
 
 #######################################################################
+##### CUDA batch builds
+
+VK_CUDA_BATCH_OBJS =
+ifeq ($(VM_CUDA_BATCH),1)
+  OPT_CUDA_BATCH ?= -O3 -maxrregcount=64 -Xptxas --disable-optimizer-constants
+  NVCCFLAGS += $(OPT_CUDA_BATCH) -diag-suppress 68
+  ifneq ($(VM_CUDA_BATCH_DEFER_BYTES),)
+    CPPFLAGS += -DVL_CUDA_BATCH_DEFER_BYTES=$(VM_CUDA_BATCH_DEFER_BYTES)
+  endif
+  ifeq ($(VM_CUDA_BATCH_LAYOUT),aos)
+    CPPFLAGS += -DVL_CUDA_BATCH_LAYOUT_AOS
+  endif
+  ifeq ($(VM_CUDA_BATCH_LAYOUT),aosoa)
+    CPPFLAGS += -DVL_CUDA_BATCH_LAYOUT_AOSOA \
+      -DVL_CUDA_BATCH_LAYOUT_GROUP=$(VM_CUDA_BATCH_LAYOUT_GROUP)
+  endif
+  VK_CUDA_BATCH_OBJS = $(addsuffix .o, $(VM_CUDA_BATCH_CLASSES) $(VM_CUDA_BATCH_GLOBAL))
+  VK_CUDA_OBJS += $(VK_CUDA_BATCH_OBJS)
+  $(VK_CUDA_BATCH_OBJS): $(VM_PREFIX).mk
+endif
+
+#######################################################################
 ### Aggregates
 
 VM_FAST += $(VM_CLASSES_FAST) $(VM_SUPPORT_FAST)
@@ -362,6 +384,11 @@ ifneq ($(VM_DEFAULT_RULES),0)
 
   $(VK_GLOBAL_OBJS): %.o: %.cpp
 	$(OBJCACHE) $(CXX) $(OPT_GLOBAL) $(VK_MODEL_CPPFLAGS) $(VK_MODEL_CXXFLAGS) -c -o $@ $<
+
+ifeq ($(VM_CUDA_BATCH),1)
+  $(VK_CUDA_BATCH_OBJS): %.o: %.cu
+	$(OBJCACHE) $(NVCC) $(filter -I% -D% -U%,$(CXXFLAGS) $(CPPFLAGS)) $(NVCCFLAGS) -MMD -MP -c -o $@ $<
+endif
 
 ifeq ($(VM_CUDA),1)
   $(VK_CUDA_DLINK): $(VK_CUDA_OBJS)

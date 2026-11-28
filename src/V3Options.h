@@ -307,6 +307,13 @@ private:
     bool m_jsonOnly = false;        // main switch: --json-only
     bool m_lintOnly = false;        // main switch: --lint-only
     bool m_gmake = false;           // main switch: --make gmake
+    bool m_cudaBatch = false;             // main switch: --cuda-batch
+    bool m_cudaBatchHybrid = false;       // main switch: --cuda-batch-hybrid
+    int m_cudaBatchForkSlots = 4;         // main switch: --cuda-batch-fork-slots
+    int m_cudaBatchOutputBytes = 65536;   // main switch: --cuda-batch-output-bytes
+    string m_cudaBatchLayout;             // main switch: --cuda-batch-layout
+    int m_cudaBatchLayoutGroup = 128;     // main switch: --cuda-batch-layout-group
+    VStringSet m_cudaBatchDpis;           // argument: --cuda-batch-dpi function names
     bool m_makeJson = false;        // main switch: --make json
     bool m_main = false;            // main switch: --main
     bool m_outFormatOk = false;     // main switch: --cc, --sc or --sp was specified
@@ -629,6 +636,12 @@ public:
     bool flatten() const { return m_flatten; }
     bool fourstate() const { return m_fourstate; }
     bool gmake() const { return m_gmake; }
+    bool cudaBatch() const { return m_cudaBatch; }
+    bool cudaBatchHybrid() const { return m_cudaBatchHybrid; }
+    int cudaBatchForkSlots() const { return m_cudaBatchForkSlots; }
+    int cudaBatchOutputBytes() const { return m_cudaBatchOutputBytes; }
+    string cudaBatchLayout() const { return m_cudaBatchLayout; }
+    int cudaBatchLayoutGroup() const { return m_cudaBatchLayoutGroup; }
     bool makeJson() const { return m_makeJson; }
     bool threadsDpiPure() const { return m_threadsDpiPure; }
     bool threadsDpiUnpure() const { return m_threadsDpiUnpure; }
@@ -775,6 +788,7 @@ public:
 
     const VStringSet& cppFiles() const { return m_cppFiles; }
     bool usesCuda() const {
+        if (m_cudaBatch) return true;
         for (const string& filename : m_cppFiles) {
             if (VString::endsWith(filename, ".cu")) return true;
         }
@@ -782,6 +796,7 @@ public:
     }
     const VStringSet& moduleFiles() const { return m_moduleFiles; }
     bool cxxModules() const { return m_cxxModules || !m_moduleFiles.empty(); }
+    const VStringSet& cudaBatchDpis() const { return m_cudaBatchDpis; }
     const VStringList& cFlags() const { return m_cFlags; }
     const VStringSet& compilerIncludes() const { return m_compilerIncludes; }
     const VStringList& ldLibFiles() const { return m_ldLibFiles; }

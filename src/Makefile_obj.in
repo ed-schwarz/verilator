@@ -219,6 +219,7 @@ RAW_OBJS_PCH_ASTMT = \
   V3Control.o \
   V3EmitCBase.o \
   V3EmitCConstPool.o \
+  V3EmitCCudaBatch.o \
   V3EmitCExecGraph.o \
   V3EmitCFunc.o \
   V3EmitCHeaders.o \
@@ -264,6 +265,8 @@ RAW_OBJS_PCH_ASTNOMT = \
   V3Coverage.o \
   V3Covergroup.o \
   V3CoverageJoin.o \
+  V3CudaBatch.o \
+  V3CudaBatchTiming.o \
   V3Dead.o \
   V3Decompose.o \
   V3Delayed.o \
