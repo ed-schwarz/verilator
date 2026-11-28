@@ -25,7 +25,7 @@ Summary:
    rule that uses these files when linking the module's executable. This
    generally is only useful when used with the :vlopt:`--exe` option.
 
-.. option:: <file.c/.cc/.cpp/.cppm/.ixx/.cxx>
+.. option:: <file.c/.cc/.cpp/.cppm/.cu/.ixx/.cxx>
 
    Used with :vlopt:`--exe` to specify optional C++ files to be linked in
    with the Verilog code. The file path should either be absolute, or
@@ -35,6 +35,12 @@ Summary:
    ``.cppm`` and ``.ixx`` files are C++20 module interface units.  Pass
    :vlopt:`--cxx-modules`; listing a ``.cppm``/``.ixx`` file on the command
    line enables the module build by itself.
+
+   ``.cu`` files are CUDA sources, compiled with ``$(NVCC)`` (default
+   ``nvcc``) using the include and define flags of the C++ files, plus
+   ``$(NVCCFLAGS)``. The runtime functions marked ``VL_HD`` in the
+   Verilator include files may be called from CUDA device code. Link the
+   CUDA runtime with e.g. :vlopt:`-LDFLAGS` ``-lcudart``.
 
    See also :vlopt:`-CFLAGS` and :vlopt:`-LDFLAGS` options, which are
    useful when the C++ files need special compiler flags. The compiler
@@ -277,6 +283,11 @@ Summary:
      MSVC++. This includes breaking deeply nested parenthesized expressions
      into sub-expressions to avoid error C1009, and breaking deep blocks
      into functions to avoid error C1061.
+
+   nvcc
+     Tune for NVIDIA CUDA nvcc, for when the generated C++ is compiled as
+     CUDA. Host code is compiled by nvcc's host compiler, so this is
+     currently the same as gcc.
 
 .. option:: --compiler-include <header-path>
 

@@ -1,0 +1,82 @@
+// DESCRIPTION: Verilator: Verilog Test CUDA main for t_cuda_device
+//
+// This file ONLY is placed under the Creative Commons Public Domain.
+// SPDX-FileCopyrightText: 2026 Wilson Snyder
+// SPDX-License-Identifier: CC0-1.0
+
+#include <verilated.h>
+
+#include <cstdio>
+#include <cuda_runtime_api.h>
+#include <memory>
+
+#include VM_PREFIX_INCLUDE
+
+constexpr int RESULTS = 12;
+
+__host__ __device__ void compute(QData a, QData b, IData* outp) {
+    VlWide<4> lw;
+    VlWide<4> rw;
+    VlWide<4> ow;
+    VL_CONCAT_WQQ(128, 64, 64, lw, a, b);
+    VL_CONCAT_WQQ(128, 64, 64, rw, b, a);
+    outp[0] = VL_COUNTONES_Q(a);
+    outp[1] = VL_REDXOR_64(b);
+    outp[2] = VL_CLOG2_Q(a);
+    outp[3] = VL_DIVS_III(32, static_cast<IData>(a), static_cast<IData>(b) | 1);
+    outp[4] = static_cast<IData>(VL_EXTENDS_QI(64, 7, 0x41) >> 32);
+    VL_ADD_W(4, ow, lw, rw);
+    outp[5] = ow[1] ^ ow[3];
+    VL_MUL_W(4, ow, lw, rw);
+    outp[6] = ow[2];
+    outp[7] = ow[3];
+    VL_SHIFTL_WWI(128, 128, 32, ow, lw, 37);
+    outp[8] = ow[1];
+    outp[9] = ow[2];
+    outp[10] = VL_MOSTSETBITP1_W(4, lw);
+    outp[11] = VL_EQ_W(4, lw, rw);
+}
+
+__global__ void kernel(QData a, QData b, IData* outp) { compute(a, b, outp); }
+
+static bool checkDevice() {
+    const QData a = 0x8765432112345678ULL;
+    const QData b = 0x0fedcba987654321ULL;
+    IData host[RESULTS];
+    compute(a, b, host);
+    IData* devp = nullptr;
+    if (cudaMalloc(reinterpret_cast<void**>(&devp), sizeof(host)) != cudaSuccess) return false;
+    kernel<<<1, 1>>>(a, b, devp);
+    IData dev[RESULTS];
+    const bool ok = cudaMemcpy(dev, devp, sizeof(dev), cudaMemcpyDeviceToHost) == cudaSuccess;
+    cudaFree(devp);
+    if (!ok) return false;
+    bool same = true;
+    for (int i = 0; i < RESULTS; ++i) {
+        if (dev[i] != host[i]) {
+            std::printf("%%Error: result %d: device=%08x host=%08x\n", i, dev[i], host[i]);
+            same = false;
+        }
+    }
+    return same;
+}
+
+int main(int argc, char** argv) {
+    const std::unique_ptr<VerilatedContext> contextp{new VerilatedContext};
+    contextp->commandArgs(argc, argv);
+    const std::unique_ptr<VM_PREFIX> topp{new VM_PREFIX{contextp.get()}};
+
+    if (!checkDevice()) {
+        std::printf("%%Error: device results differ\n");
+        return 1;
+    }
+
+    topp->clk = 0;
+    while (!contextp->gotFinish() && contextp->time() < 1000) {
+        topp->eval();
+        contextp->timeInc(1);
+        topp->clk = !topp->clk;
+    }
+    topp->final();
+    return 0;
+}

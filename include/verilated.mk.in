@@ -16,6 +16,7 @@ AR = @AR@
 CXX = @CXX@
 LINK = @CXX@
 OBJCACHE ?= @OBJCACHE@
+NVCC ?= nvcc
 PERL = @PERL@
 PYTHON3 = @PYTHON3@
 

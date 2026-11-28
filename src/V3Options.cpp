@@ -1364,10 +1364,14 @@ void V3Options::parseOptsList(FileLine* fl, const string& optdir, int argc,
             m_compLimitBlocks = 80;  // 128, but allow some room
             m_compLimitMembers = 0;  // probably ok, and AFAIK doesn't support anon structs
             m_compLimitParens = 80;  // 128, but allow some room
+        } else if (!std::strcmp(valp, "nvcc")) {
+            m_compLimitBlocks = 0;  // Host code goes to gcc or clang
+            m_compLimitMembers = 64;  // As for gcc
+            m_compLimitParens = 240;  // As for gcc
         } else {
             fl->v3error("Unknown setting for --compiler: '"
                         << valp << "'\n"
-                        << fl->warnMore() << "... Suggest 'clang', 'gcc', or 'msvc'");
+                        << fl->warnMore() << "... Suggest 'clang', 'gcc', 'msvc', or 'nvcc'");
         }
     });
     DECL_OPTION("-compiler-include", CbVal, callStrSetter(&V3Options::addCompilerIncludes));
@@ -2112,6 +2116,7 @@ void V3Options::parseOptsList(FileLine* fl, const string& optdir, int argc,
             || suffixed(filename, ".cxx")  //
             || suffixed(filename, ".cc")  //
             || suffixed(filename, ".c")  //
+            || suffixed(filename, ".cu")  //
             || suffixed(filename, ".sp")) {
             V3Options::addCppFile(filename);
         } else if (suffixed(filename, ".cppm")  //

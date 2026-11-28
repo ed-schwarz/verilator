@@ -224,6 +224,12 @@
 #define VL_MT_DISABLED \
     VL_CLANG_ATTR(annotate("MT_DISABLED")) \
     VL_EXCLUDES(VlOs::MtScopeMutex::s_haveThreadScope)
+// Mark a function as callable from both host and CUDA device code
+#ifdef __CUDACC__
+# define VL_HD __host__ __device__
+#else
+# define VL_HD
+#endif
 // Bit builtins, using the CUDA intrinsics when compiling CUDA device code
 #if defined(__CUDA_ARCH__)
 # define VL_BUILTIN_PARITYL(x) (__popcll(static_cast<unsigned long long>(x)) & 1)
