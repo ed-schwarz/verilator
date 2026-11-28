@@ -39,8 +39,13 @@ Summary:
    ``.cu`` files are CUDA sources, compiled with ``$(NVCC)`` (default
    ``nvcc``) using the include and define flags of the C++ files, plus
    ``$(NVCCFLAGS)``. The runtime functions marked ``VL_HD`` in the
-   Verilator include files may be called from CUDA device code. Link the
-   CUDA runtime with e.g. :vlopt:`-LDFLAGS` ``-lcudart``.
+   Verilator include files may be called from CUDA device code. With
+   ``.cu`` files, the makefile compiles them for relocatable device code,
+   adds a device link step, and links the CUDA runtime. Make variables
+   control this: ``CUDA_HOME`` (the CUDA installation, when ``nvcc`` and
+   its headers are not on the default paths), ``NVCC_ARCH`` (default
+   ``-arch=native``), and ``NVCC_HOST`` (passed as ``-ccbin``, default
+   nvcc's own host compiler).
 
    See also :vlopt:`-CFLAGS` and :vlopt:`-LDFLAGS` options, which are
    useful when the C++ files need special compiler flags. The compiler

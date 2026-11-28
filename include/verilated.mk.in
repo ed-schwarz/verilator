@@ -16,7 +16,7 @@ AR = @AR@
 CXX = @CXX@
 LINK = @CXX@
 OBJCACHE ?= @OBJCACHE@
-NVCC ?= nvcc
+NVCC ?= $(if $(CUDA_HOME),$(CUDA_HOME)/bin/nvcc,nvcc)
 PERL = @PERL@
 PYTHON3 = @PYTHON3@
 
@@ -212,6 +212,33 @@ ifneq ($(VM_TIMING),0)
 endif
 
 #######################################################################
+##### CUDA builds
+
+VK_CUDA_DLINK =
+ifeq ($(VM_CUDA),1)
+  ifneq ($(CUDA_HOME),)
+    CPPFLAGS += -I$(CUDA_HOME)/include
+    LDFLAGS += -L$(CUDA_HOME)/lib64 -Wl,-rpath,$(CUDA_HOME)/lib64
+  endif
+  NVCC_ARCH ?= -arch=native
+  NVCCFLAGS += $(NVCC_ARCH) -rdc=true
+  ifneq ($(NVCC_HOST),)
+    NVCCFLAGS += -ccbin $(NVCC_HOST)
+  endif
+  LDLIBS += -lcudadevrt -lcudart
+  VK_CUDA_OBJS += $(addsuffix .o, $(VM_CUDA_USER_CLASSES))
+  VK_CUDA_DLINK = $(VM_PREFIX)__cuda_dlink.o
+  ifeq ($(filter clean,$(MAKECMDGOALS)),)
+    VK_CUDA_HEADERS := $(shell printf '\043include <cuda_runtime_api.h>\n' \
+      | $(CXX) $(filter -I% -D%,$(CPPFLAGS)) -x c++ -fsyntax-only - >/dev/null 2>&1 && echo ok)
+    ifneq ($(VK_CUDA_HEADERS),ok)
+      $(error $(CXX) cannot find cuda_runtime_api.h. Use a C++ compiler that sees the CUDA \
+        headers, or set CUDA_HOME)
+    endif
+  endif
+endif
+
+#######################################################################
 ### Aggregates
 
 VM_FAST += $(VM_CLASSES_FAST) $(VM_SUPPORT_FAST)
@@ -335,6 +362,11 @@ ifneq ($(VM_DEFAULT_RULES),0)
 
   $(VK_GLOBAL_OBJS): %.o: %.cpp
 	$(OBJCACHE) $(CXX) $(OPT_GLOBAL) $(VK_MODEL_CPPFLAGS) $(VK_MODEL_CXXFLAGS) -c -o $@ $<
+
+ifeq ($(VM_CUDA),1)
+  $(VK_CUDA_DLINK): $(VK_CUDA_OBJS)
+	$(NVCC) $(NVCC_ARCH) -dlink -o $@ $^
+endif
 
 # Precompile a header file
 # PCH's compiler flags must match exactly the rules' above FAST/SLOW

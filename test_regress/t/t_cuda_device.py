@@ -9,21 +9,14 @@
 
 import vltest_bootstrap
 
-import os
-import shutil
-
 test.scenarios('vlt')
 
 if not test.have_gpu:
     test.skip("No CUDA compiler or GPU")
 
-cuda_lib = os.path.join(os.path.dirname(os.path.dirname(shutil.which("nvcc"))), "lib64")
-
-test.compile(make_main=False,
-             verilator_flags2=[
-                 "--exe", "--compiler nvcc", "t/t_cuda_device.cu", "-LDFLAGS",
-                 "'-L" + cuda_lib + " -lcudart'"
-             ])
+test.compile(
+    make_main=False,
+    verilator_flags2=["--exe", "--compiler nvcc", "t/t_cuda_device.cu", "t/t_cuda_device_lib.cu"])
 
 test.execute()
 

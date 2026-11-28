@@ -598,6 +598,8 @@ public:
         of.putSet("VM_TRACE_VCD", v3Global.opt.traceEnabledVcd() ? "1" : "0");
         of.puts("# VPI enabled?  0/1 (from --vpi)\n");
         of.putSet("VM_VPI", v3Global.opt.vpi() ? "1" : "0");
+        of.puts("# CUDA sources?  0/1 (from .cu files)\n");
+        of.putSet("VM_CUDA", v3Global.opt.usesCuda() ? "1" : "0");
         // Link flags for runtime VPI library loading are emitted by emitOverallMake() after
         // verilated.mk is included (so $(CFG_LDFLAGS_DYNAMIC)/$(CFG_LDLIBS_DYNAMIC) are defined).
 
@@ -757,6 +759,17 @@ public:
 
         of.puts("\n");
 
+        if (v3Global.opt.usesCuda()) {
+            of.puts("# User .cu files (from .cu's on Verilator command line)\n");
+            of.puts("VM_CUDA_USER_CLASSES = \\\n");
+            for (const auto& cppfile : cppFiles) {
+                if (VString::endsWith(cppfile, ".cu")) {
+                    of.puts("  " + V3Os::filenameNonDirExt(cppfile) + " \\\n");
+                }
+            }
+            of.puts("\n");
+        }
+
         of.puts("# User .cpp directories (from .cpp's on Verilator command line)\n");
         of.puts("VM_USER_DIR = \\\n");
         for (const auto& i : dirs) of.puts("  " + i + " \\\n");
@@ -845,16 +858,16 @@ public:
             of.puts("\n### Link rules... (from --exe)\n");
             // '{prefix}__ALL.a', contains all hierarchical libraries
             of.puts(v3Global.opt.exeName()
-                    + ": $(VK_USER_OBJS) $(VK_GLOBAL_OBJS) $(VM_PREFIX)__ALL.a"
+                    + ": $(VK_USER_OBJS) $(VK_GLOBAL_OBJS) $(VK_CUDA_DLINK) $(VM_PREFIX)__ALL.a"
                       " $(VM_USER_LDLIBS_FILES)\n");
             // User library files are in LDLIBS, so do not also link them from $^
             of.puts("\t$(LINK) $(LDFLAGS) $(filter-out $(VM_USER_LDLIBS_FILES),$^) $(LOADLIBES) "
                     "$(LDLIBS) $(LIBS) $(SC_LIBS) -o $@\n");
             of.puts("\n");
         } else if (!v3Global.opt.libCreate().empty()) {
-            const string libCreateDeps = "$(VK_OBJS) $(VK_USER_OBJS) $(VK_GLOBAL_OBJS) "
-                                         + v3Global.opt.libCreate() + ".o $(VM_HIER_LIBS)"
-                                         + archiveDep;
+            const string libCreateDeps
+                = "$(VK_OBJS) $(VK_USER_OBJS) $(VK_GLOBAL_OBJS) $(VK_CUDA_DLINK) "
+                  + v3Global.opt.libCreate() + ".o $(VM_HIER_LIBS)" + archiveDep;
             of.puts("\n### Library rules from --lib-create\n");
             // The rule to create .a is defined in verilated.mk, so just define dependency here.
             of.puts(v3Global.opt.libCreateName(false) + ": " + libCreateDeps + "\n");
@@ -884,7 +897,8 @@ public:
             const string libname = "lib" + v3Global.opt.prefix() + ".a";
             of.puts("\n### Library rules (default lib mode)\n");
             // The rule to create .a is defined in verilated.mk, so just define dependency here.
-            of.puts(libname + ": $(VK_OBJS) $(VK_USER_OBJS) $(VM_HIER_LIBS)" + archiveDep + "\n");
+            of.puts(libname + ": $(VK_OBJS) $(VK_USER_OBJS) $(VK_CUDA_DLINK) $(VM_HIER_LIBS)"
+                    + archiveDep + "\n");
             of.puts("libverilated.a: $(VK_GLOBAL_OBJS)\n");
             // let default rule depend on '{prefix}__ALL.a', for compatibility
             of.puts("lib" + v3Global.opt.prefix() + ": " + libname

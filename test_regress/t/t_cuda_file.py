@@ -17,4 +17,8 @@ test.compile(verilator_flags2=["--exe", "t/t_cuda_device.cu"], verilator_make_gm
 test.file_grep(test.obj_dir + "/" + test.vm_prefix + ".mk",
                r'VM_USER_CLASSES = \\\n  t_cuda_device ')
 
+test.file_grep(test.obj_dir + "/" + test.vm_prefix + "_classes.mk", r'VM_CUDA = 1')
+test.file_grep(test.obj_dir + "/" + test.vm_prefix + ".mk",
+               r'VM_CUDA_USER_CLASSES = \\\n  t_cuda_device ')
+
 test.passes()

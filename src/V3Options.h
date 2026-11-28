@@ -774,6 +774,12 @@ public:
     string xInitial() const { return m_xInitial; }
 
     const VStringSet& cppFiles() const { return m_cppFiles; }
+    bool usesCuda() const {
+        for (const string& filename : m_cppFiles) {
+            if (VString::endsWith(filename, ".cu")) return true;
+        }
+        return false;
+    }
     const VStringSet& moduleFiles() const { return m_moduleFiles; }
     bool cxxModules() const { return m_cxxModules || !m_moduleFiles.empty(); }
     const VStringList& cFlags() const { return m_cFlags; }
